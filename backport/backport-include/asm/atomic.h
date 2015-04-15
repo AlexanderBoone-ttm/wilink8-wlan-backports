@@ -34,4 +34,8 @@ extern long long atomic64_add_return(long long a, atomic64_t *v);
 #endif
 #endif
 
+#ifndef smp_mb__after_clear_bit
+#define smp_mb__after_clear_bit smp_mb__after_atomic 
+#endif
+
 #endif /* __BACKPORT_ASM_ATOMIC_H */

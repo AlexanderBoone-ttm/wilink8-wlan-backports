@@ -1,0 +1,74 @@
+From 1516a2ab6e8e3fe52dfafc5f9a967c716fcbd4ae Mon Sep 17 00:00:00 2001
+Date: Wed, 16 Dec 2015 17:31:44 +0200
+Subject: [PATCH 20/25] apply backport SmPL patch
+ collateral-evolutions/network/0055-netdev-tstats.cocci
+
+---
+ net/mac80211/iface.c | 9 +++++----
+ net/mac80211/rx.c    | 2 +-
+ net/mac80211/tx.c    | 2 +-
+ 3 files changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/net/mac80211/iface.c b/net/mac80211/iface.c
+index ca0fb20..8b8e80a 100644
+--- a/net/mac80211/iface.c
++++ b/net/mac80211/iface.c
+@@ -1124,7 +1124,7 @@ ieee80211_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
+ 		u64 rx_packets, rx_bytes, tx_packets, tx_bytes;
+ 		unsigned int start;
+ 
+-		tstats = per_cpu_ptr(dev->tstats, i);
++		tstats = per_cpu_ptr(netdev_tstats(dev), i);
+ 
+ 		do {
+ 			start = u64_stats_fetch_begin_irq(&tstats->syncp);
+@@ -1201,7 +1201,7 @@ static const struct net_device_ops ieee80211_monitorif_ops = {
+ 
+ static void ieee80211_if_free(struct net_device *dev)
+ {
+-	free_percpu(dev->tstats);
++	free_percpu(netdev_tstats(dev));
+ 	free_netdev(dev);
+ }
+ 
+@@ -1749,8 +1749,9 @@ int ieee80211_if_add(struct ieee80211_local *local, const char *name,
+ 			return -ENOMEM;
+ 		dev_net_set(ndev, wiphy_net(local->hw.wiphy));
+ 
+-		ndev->tstats = netdev_alloc_pcpu_stats(struct pcpu_sw_netstats);
+-		if (!ndev->tstats) {
++		netdev_assign_tstats(ndev,
++				     netdev_alloc_pcpu_stats(struct pcpu_sw_netstats));
++		if (!netdev_tstats(ndev)) {
+ 			free_netdev(ndev);
+ 			return -ENOMEM;
+ 		}
+diff --git a/net/mac80211/rx.c b/net/mac80211/rx.c
+index 8bae5de..733482f 100644
+--- a/net/mac80211/rx.c
++++ b/net/mac80211/rx.c
+@@ -34,7 +34,7 @@
+ 
+ static inline void ieee80211_rx_stats(struct net_device *dev, u32 len)
+ {
+-	struct pcpu_sw_netstats *tstats = this_cpu_ptr(dev->tstats);
++	struct pcpu_sw_netstats *tstats = this_cpu_ptr(netdev_tstats(dev));
+ 
+ 	u64_stats_update_begin(&tstats->syncp);
+ 	tstats->rx_packets++;
+diff --git a/net/mac80211/tx.c b/net/mac80211/tx.c
+index bdc224d..1c24978 100644
+--- a/net/mac80211/tx.c
++++ b/net/mac80211/tx.c
+@@ -39,7 +39,7 @@
+ 
+ static inline void ieee80211_tx_stats(struct net_device *dev, u32 len)
+ {
+-	struct pcpu_sw_netstats *tstats = this_cpu_ptr(dev->tstats);
++	struct pcpu_sw_netstats *tstats = this_cpu_ptr(netdev_tstats(dev));
+ 
+ 	u64_stats_update_begin(&tstats->syncp);
+ 	tstats->tx_packets++;
+-- 
+2.6.3
+

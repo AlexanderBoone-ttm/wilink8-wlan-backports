@@ -1,0 +1,325 @@
+From 3df77d60e947c1532ebed5dc7d088d04ae5cc179 Mon Sep 17 00:00:00 2001
+Date: Wed, 16 Dec 2015 17:30:31 +0200
+Subject: [PATCH 06/25] apply backport SmPL patch
+ collateral-evolutions/network/0019-usb_driver_lpm.cocci
+
+---
+ drivers/bluetooth/ath3k.c                           | 2 ++
+ drivers/bluetooth/bcm203x.c                         | 2 ++
+ drivers/bluetooth/bfusb.c                           | 2 ++
+ drivers/bluetooth/bpa10x.c                          | 2 ++
+ drivers/bluetooth/btusb.c                           | 2 ++
+ drivers/net/usb/cdc_ether.c                         | 2 ++
+ drivers/net/usb/cdc_mbim.c                          | 2 ++
+ drivers/net/usb/cdc_ncm.c                           | 2 ++
+ drivers/net/usb/qmi_wwan.c                          | 2 ++
+ drivers/net/usb/rndis_host.c                        | 2 ++
+ drivers/net/usb/sierra_net.c                        | 2 ++
+ drivers/net/wireless/ath/ath6kl/usb.c               | 2 ++
+ drivers/net/wireless/ath/ath9k/hif_usb.c            | 2 ++
+ drivers/net/wireless/ath/carl9170/usb.c             | 2 ++
+ drivers/net/wireless/mediatek/mt7601u/usb.c         | 2 ++
+ drivers/net/wireless/realtek/rtl818x/rtl8187/dev.c  | 2 ++
+ drivers/net/wireless/realtek/rtl8xxxu/rtl8xxxu.c    | 2 ++
+ drivers/net/wireless/realtek/rtlwifi/rtl8192cu/sw.c | 2 ++
+ drivers/net/wireless/rndis_wlan.c                   | 2 ++
+ drivers/nfc/nfcmrvl/usb.c                           | 2 ++
+ drivers/usb/class/cdc-wdm.c                         | 2 ++
+ 21 files changed, 42 insertions(+)
+
+diff --git a/drivers/bluetooth/ath3k.c b/drivers/bluetooth/ath3k.c
+index fa893c3..0a0f3c3 100644
+--- a/drivers/bluetooth/ath3k.c
++++ b/drivers/bluetooth/ath3k.c
+@@ -555,7 +555,9 @@ static struct usb_driver ath3k_driver = {
+ 	.probe		= ath3k_probe,
+ 	.disconnect	= ath3k_disconnect,
+ 	.id_table	= ath3k_table,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ 
+ module_usb_driver(ath3k_driver);
+diff --git a/drivers/bluetooth/bcm203x.c b/drivers/bluetooth/bcm203x.c
+index 364f82b..ee43c60 100644
+--- a/drivers/bluetooth/bcm203x.c
++++ b/drivers/bluetooth/bcm203x.c
+@@ -273,7 +273,9 @@ static struct usb_driver bcm203x_driver = {
+ 	.probe		= bcm203x_probe,
+ 	.disconnect	= bcm203x_disconnect,
+ 	.id_table	= bcm203x_table,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ 
+ module_usb_driver(bcm203x_driver);
+diff --git a/drivers/bluetooth/bfusb.c b/drivers/bluetooth/bfusb.c
+index 616ec2a..f491ec7 100644
+--- a/drivers/bluetooth/bfusb.c
++++ b/drivers/bluetooth/bfusb.c
+@@ -727,7 +727,9 @@ static struct usb_driver bfusb_driver = {
+ 	.probe		= bfusb_probe,
+ 	.disconnect	= bfusb_disconnect,
+ 	.id_table	= bfusb_table,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ 
+ module_usb_driver(bfusb_driver);
+diff --git a/drivers/bluetooth/bpa10x.c b/drivers/bluetooth/bpa10x.c
+index 49c397e..bba0d13 100644
+--- a/drivers/bluetooth/bpa10x.c
++++ b/drivers/bluetooth/bpa10x.c
+@@ -449,7 +449,9 @@ static struct usb_driver bpa10x_driver = {
+ 	.probe		= bpa10x_probe,
+ 	.disconnect	= bpa10x_disconnect,
+ 	.id_table	= bpa10x_table,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ 
+ module_usb_driver(bpa10x_driver);
+diff --git a/drivers/bluetooth/btusb.c b/drivers/bluetooth/btusb.c
+index b27a2b9..5374d90 100644
+--- a/drivers/bluetooth/btusb.c
++++ b/drivers/bluetooth/btusb.c
+@@ -3281,7 +3281,9 @@ static struct usb_driver btusb_driver = {
+ #endif
+ 	.id_table	= btusb_table,
+ 	.supports_autosuspend = 1,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ 
+ module_usb_driver(btusb_driver);
+diff --git a/drivers/net/usb/cdc_ether.c b/drivers/net/usb/cdc_ether.c
+index 3da70bf..fd00740 100644
+--- a/drivers/net/usb/cdc_ether.c
++++ b/drivers/net/usb/cdc_ether.c
+@@ -728,7 +728,9 @@ static struct usb_driver cdc_driver = {
+ 	.resume =	usbnet_resume,
+ 	.reset_resume =	usbnet_resume,
+ 	.supports_autosuspend = 1,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ 
+ module_usb_driver(cdc_driver);
+diff --git a/drivers/net/usb/cdc_mbim.c b/drivers/net/usb/cdc_mbim.c
+index ee49562..e39904f 100644
+--- a/drivers/net/usb/cdc_mbim.c
++++ b/drivers/net/usb/cdc_mbim.c
+@@ -635,7 +635,9 @@ static struct usb_driver cdc_mbim_driver = {
+ 	.resume = cdc_mbim_resume,
+ 	.reset_resume =	cdc_mbim_resume,
+ 	.supports_autosuspend = 1,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ module_usb_driver(cdc_mbim_driver);
+ 
+diff --git a/drivers/net/usb/cdc_ncm.c b/drivers/net/usb/cdc_ncm.c
+index 20d706d..2c44f4c 100644
+--- a/drivers/net/usb/cdc_ncm.c
++++ b/drivers/net/usb/cdc_ncm.c
+@@ -1606,7 +1606,9 @@ static struct usb_driver cdc_ncm_driver = {
+ 	.resume = usbnet_resume,
+ 	.reset_resume =	usbnet_resume,
+ 	.supports_autosuspend = 1,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ 
+ module_usb_driver(cdc_ncm_driver);
+diff --git a/drivers/net/usb/qmi_wwan.c b/drivers/net/usb/qmi_wwan.c
+index 34799ea..fc54090 100644
+--- a/drivers/net/usb/qmi_wwan.c
++++ b/drivers/net/usb/qmi_wwan.c
+@@ -850,7 +850,9 @@ static struct usb_driver qmi_wwan_driver = {
+ 	.resume		      =	qmi_wwan_resume,
+ 	.reset_resume         = qmi_wwan_resume,
+ 	.supports_autosuspend = 1,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ 
+ module_usb_driver(qmi_wwan_driver);
+diff --git a/drivers/net/usb/rndis_host.c b/drivers/net/usb/rndis_host.c
+index 524a47a..8b95d6c 100644
+--- a/drivers/net/usb/rndis_host.c
++++ b/drivers/net/usb/rndis_host.c
+@@ -639,7 +639,9 @@ static struct usb_driver rndis_driver = {
+ 	.disconnect =	usbnet_disconnect,
+ 	.suspend =	usbnet_suspend,
+ 	.resume =	usbnet_resume,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ 
+ module_usb_driver(rndis_driver);
+diff --git a/drivers/net/usb/sierra_net.c b/drivers/net/usb/sierra_net.c
+index a251588..3180af3 100644
+--- a/drivers/net/usb/sierra_net.c
++++ b/drivers/net/usb/sierra_net.c
+@@ -958,7 +958,9 @@ static struct usb_driver sierra_net_driver = {
+ 	.suspend = usbnet_suspend,
+ 	.resume = usbnet_resume,
+ 	.no_dynamic_id = 1,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ 
+ module_usb_driver(sierra_net_driver);
+diff --git a/drivers/net/wireless/ath/ath6kl/usb.c b/drivers/net/wireless/ath/ath6kl/usb.c
+index 9da3594..a0b89b5 100644
+--- a/drivers/net/wireless/ath/ath6kl/usb.c
++++ b/drivers/net/wireless/ath/ath6kl/usb.c
+@@ -1217,7 +1217,9 @@ static struct usb_driver ath6kl_usb_driver = {
+ 	.disconnect = ath6kl_usb_remove,
+ 	.id_table = ath6kl_usb_ids,
+ 	.supports_autosuspend = true,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ 
+ module_usb_driver(ath6kl_usb_driver);
+diff --git a/drivers/net/wireless/ath/ath9k/hif_usb.c b/drivers/net/wireless/ath/ath9k/hif_usb.c
+index 165dd20..c3c86f7 100644
+--- a/drivers/net/wireless/ath/ath9k/hif_usb.c
++++ b/drivers/net/wireless/ath/ath9k/hif_usb.c
+@@ -1425,7 +1425,9 @@ static struct usb_driver ath9k_hif_usb_driver = {
+ #endif
+ 	.id_table = ath9k_hif_usb_ids,
+ 	.soft_unbind = 1,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ 
+ int ath9k_hif_usb_init(void)
+diff --git a/drivers/net/wireless/ath/carl9170/usb.c b/drivers/net/wireless/ath/carl9170/usb.c
+index 76842e6..a8ee60d 100644
+--- a/drivers/net/wireless/ath/carl9170/usb.c
++++ b/drivers/net/wireless/ath/carl9170/usb.c
+@@ -1196,7 +1196,9 @@ static struct usb_driver carl9170_driver = {
+ 	.resume = carl9170_usb_resume,
+ 	.reset_resume = carl9170_usb_resume,
+ #endif /* CONFIG_PM */
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ 
+ module_usb_driver(carl9170_driver);
+diff --git a/drivers/net/wireless/mediatek/mt7601u/usb.c b/drivers/net/wireless/mediatek/mt7601u/usb.c
+index 416c604..00e4ee5 100644
+--- a/drivers/net/wireless/mediatek/mt7601u/usb.c
++++ b/drivers/net/wireless/mediatek/mt7601u/usb.c
+@@ -357,6 +357,8 @@ static struct usb_driver mt7601u_driver = {
+ 	.resume		= mt7601u_resume,
+ 	.reset_resume	= mt7601u_resume,
+ 	.soft_unbind	= 1,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ module_usb_driver(mt7601u_driver);
+diff --git a/drivers/net/wireless/realtek/rtl818x/rtl8187/dev.c b/drivers/net/wireless/realtek/rtl818x/rtl8187/dev.c
+index b7f72f9..86b5b73 100644
+--- a/drivers/net/wireless/realtek/rtl818x/rtl8187/dev.c
++++ b/drivers/net/wireless/realtek/rtl818x/rtl8187/dev.c
+@@ -1678,7 +1678,9 @@ static struct usb_driver rtl8187_driver = {
+ 	.id_table	= rtl8187_table,
+ 	.probe		= rtl8187_probe,
+ 	.disconnect	= rtl8187_disconnect,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ 
+ module_usb_driver(rtl8187_driver);
+diff --git a/drivers/net/wireless/realtek/rtl8xxxu/rtl8xxxu.c b/drivers/net/wireless/realtek/rtl8xxxu/rtl8xxxu.c
+index 6aed923..6e720ea 100644
+--- a/drivers/net/wireless/realtek/rtl8xxxu/rtl8xxxu.c
++++ b/drivers/net/wireless/realtek/rtl8xxxu/rtl8xxxu.c
+@@ -5967,7 +5967,9 @@ static struct usb_driver rtl8xxxu_driver = {
+ 	.probe = rtl8xxxu_probe,
+ 	.disconnect = rtl8xxxu_disconnect,
+ 	.id_table = dev_table,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ 
+ static int __init rtl8xxxu_module_init(void)
+diff --git a/drivers/net/wireless/realtek/rtlwifi/rtl8192cu/sw.c b/drivers/net/wireless/realtek/rtlwifi/rtl8192cu/sw.c
+index fd4a535..799ff99 100644
+--- a/drivers/net/wireless/realtek/rtlwifi/rtl8192cu/sw.c
++++ b/drivers/net/wireless/realtek/rtlwifi/rtl8192cu/sw.c
+@@ -406,7 +406,9 @@ static struct usb_driver rtl8192cu_driver = {
+ 	/* .resume = rtl_usb_resume, */
+ 	/* .reset_resume = rtl8192c_resume, */
+ #endif /* CONFIG_PM */
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ 
+ module_usb_driver(rtl8192cu_driver);
+diff --git a/drivers/net/wireless/rndis_wlan.c b/drivers/net/wireless/rndis_wlan.c
+index a13d1f2..1ccbcb5 100644
+--- a/drivers/net/wireless/rndis_wlan.c
++++ b/drivers/net/wireless/rndis_wlan.c
+@@ -3756,7 +3756,9 @@ static struct usb_driver rndis_wlan_driver = {
+ 	.disconnect =	usbnet_disconnect,
+ 	.suspend =	usbnet_suspend,
+ 	.resume =	usbnet_resume,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ 
+ module_usb_driver(rndis_wlan_driver);
+diff --git a/drivers/nfc/nfcmrvl/usb.c b/drivers/nfc/nfcmrvl/usb.c
+index 585a0f2..06eb361 100644
+--- a/drivers/nfc/nfcmrvl/usb.c
++++ b/drivers/nfc/nfcmrvl/usb.c
+@@ -462,7 +462,9 @@ static struct usb_driver nfcmrvl_usb_driver = {
+ #endif
+ 	.id_table	= nfcmrvl_table,
+ 	.supports_autosuspend = 1,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ 	.soft_unbind = 1,
+ };
+ module_usb_driver(nfcmrvl_usb_driver);
+diff --git a/drivers/usb/class/cdc-wdm.c b/drivers/usb/class/cdc-wdm.c
+index 61ea879..afadac0 100644
+--- a/drivers/usb/class/cdc-wdm.c
++++ b/drivers/usb/class/cdc-wdm.c
+@@ -1106,7 +1106,9 @@ static struct usb_driver wdm_driver = {
+ 	.post_reset =	wdm_post_reset,
+ 	.id_table =	wdm_ids,
+ 	.supports_autosuspend = 1,
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+ 	.disable_hub_initiated_lpm = 1,
++#endif
+ };
+ 
+ module_usb_driver(wdm_driver);
+-- 
+2.6.3
+

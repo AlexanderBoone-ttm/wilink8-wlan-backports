@@ -1,0 +1,45 @@
+From cce5e0b53a152ccac15d346d99ddab7772f1af47 Mon Sep 17 00:00:00 2001
+Date: Wed, 16 Dec 2015 17:31:59 +0200
+Subject: [PATCH 24/25] apply backport SmPL patch
+ collateral-evolutions/network/0062-iff-no-queue.cocci
+
+---
+ drivers/net/wireless/mac80211_hwsim.c | 4 ++++
+ net/6lowpan/core.c                    | 4 ++++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/drivers/net/wireless/mac80211_hwsim.c b/drivers/net/wireless/mac80211_hwsim.c
+index fb86796..6e07ae7 100644
+--- a/drivers/net/wireless/mac80211_hwsim.c
++++ b/drivers/net/wireless/mac80211_hwsim.c
+@@ -2676,7 +2676,11 @@ static void hwsim_mon_setup(struct net_device *dev)
+ 	dev->netdev_ops = &hwsim_netdev_ops;
+ 	dev->destructor = free_netdev;
+ 	ether_setup(dev);
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,3,0)
+ 	dev->priv_flags |= IFF_NO_QUEUE;
++#else
++	dev->tx_queue_len = 0;
++#endif
+ 	dev->type = ARPHRD_IEEE80211_RADIOTAP;
+ 	eth_zero_addr(dev->dev_addr);
+ 	dev->dev_addr[0] = 0x12;
+diff --git a/net/6lowpan/core.c b/net/6lowpan/core.c
+index 0b72354..5adcb69 100644
+--- a/net/6lowpan/core.c
++++ b/net/6lowpan/core.c
+@@ -21,7 +21,11 @@ void lowpan_netdev_setup(struct net_device *dev, enum lowpan_lltypes lltype)
+ 	dev->addr_len = EUI64_ADDR_LEN;
+ 	dev->type = ARPHRD_6LOWPAN;
+ 	dev->mtu = IPV6_MIN_MTU;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,3,0)
+ 	dev->priv_flags |= IFF_NO_QUEUE;
++#else
++	dev->tx_queue_len = 0;
++#endif
+ 
+ 	lowpan_priv(dev)->lltype = lltype;
+ }
+-- 
+2.6.3
+

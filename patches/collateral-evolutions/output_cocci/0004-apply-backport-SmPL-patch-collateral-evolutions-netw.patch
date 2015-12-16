@@ -1,0 +1,698 @@
+From 1a72fa0a6e09b676bfec1d63fe59bfdba776be70 Mon Sep 17 00:00:00 2001
+Date: Wed, 16 Dec 2015 17:30:18 +0200
+Subject: [PATCH 04/25] apply backport SmPL patch
+ collateral-evolutions/network/0001-netlink-portid.cocci
+
+---
+ drivers/net/wireless/mac80211_hwsim.c |  20 ++++---
+ net/ieee802154/nl-mac.c               |   7 ++-
+ net/ieee802154/nl-phy.c               |   5 +-
+ net/ieee802154/nl802154.c             |  16 +++---
+ net/nfc/netlink.c                     |  24 ++++----
+ net/wireless/nl80211.c                | 101 +++++++++++++++++++---------------
+ 6 files changed, 97 insertions(+), 76 deletions(-)
+
+diff --git a/drivers/net/wireless/mac80211_hwsim.c b/drivers/net/wireless/mac80211_hwsim.c
+index c00a7da..4726098 100644
+--- a/drivers/net/wireless/mac80211_hwsim.c
++++ b/drivers/net/wireless/mac80211_hwsim.c
+@@ -2352,7 +2352,7 @@ static int mac80211_hwsim_new_radio(struct genl_info *info,
+ 	data->idx = idx;
+ 	data->destroy_on_close = param->destroy_on_close;
+ 	if (info)
+-		data->portid = info->snd_portid;
++		data->portid = genl_info_snd_portid(info);
+ 
+ 	if (data->use_chanctx) {
+ 		hw->wiphy->max_scan_ssids = 255;
+@@ -2717,7 +2717,7 @@ static int hwsim_tx_info_frame_received_nl(struct sk_buff *skb_2,
+ 	int i;
+ 	bool found = false;
+ 
+-	if (info->snd_portid != wmediumd_portid)
++	if (genl_info_snd_portid(info) != wmediumd_portid)
+ 		return -EINVAL;
+ 
+ 	if (!info->attrs[HWSIM_ATTR_ADDR_TRANSMITTER] ||
+@@ -2792,7 +2792,7 @@ static int hwsim_cloned_frame_received_nl(struct sk_buff *skb_2,
+ 	void *frame_data;
+ 	struct sk_buff *skb = NULL;
+ 
+-	if (info->snd_portid != wmediumd_portid)
++	if (genl_info_snd_portid(info) != wmediumd_portid)
+ 		return -EINVAL;
+ 
+ 	if (!info->attrs[HWSIM_ATTR_ADDR_RECEIVER] ||
+@@ -2870,10 +2870,11 @@ static int hwsim_register_received_nl(struct sk_buff *skb_2,
+ 	if (wmediumd_portid)
+ 		return -EBUSY;
+ 
+-	wmediumd_portid = info->snd_portid;
++	wmediumd_portid = genl_info_snd_portid(info);
+ 
+ 	printk(KERN_DEBUG "mac80211_hwsim: received a REGISTER, "
+-	       "switching to wmediumd mode with pid %d\n", info->snd_portid);
++	       "switching to wmediumd mode with pid %d\n",
++	       genl_info_snd_portid(info));
+ 
+ 	return 0;
+ }
+@@ -2972,7 +2973,8 @@ static int hwsim_get_radio_nl(struct sk_buff *msg, struct genl_info *info)
+ 			goto out_err;
+ 		}
+ 
+-		res = mac80211_hwsim_get_radio(skb, data, info->snd_portid,
++		res = mac80211_hwsim_get_radio(skb, data,
++					       genl_info_snd_portid(info),
+ 					       info->snd_seq, NULL, 0);
+ 		if (res < 0) {
+ 			nlmsg_free(skb);
+@@ -3006,7 +3008,7 @@ static int hwsim_dump_radio_nl(struct sk_buff *skb,
+ 			continue;
+ 
+ 		res = mac80211_hwsim_get_radio(skb, data,
+-					       NETLINK_CB(cb->skb).portid,
++					       NETLINK_CB_PORTID(cb->skb),
+ 					       cb->nlh->nlmsg_seq, cb,
+ 					       NLM_F_MULTI);
+ 		if (res < 0)
+@@ -3092,9 +3094,9 @@ static int mac80211_hwsim_netlink_notify(struct notifier_block *nb,
+ 	if (state != NETLINK_URELEASE)
+ 		return NOTIFY_DONE;
+ 
+-	remove_user_radios(notify->portid);
++	remove_user_radios(netlink_notify_portid(notify));
+ 
+-	if (notify->portid == wmediumd_portid) {
++	if (netlink_notify_portid(notify) == wmediumd_portid) {
+ 		printk(KERN_INFO "mac80211_hwsim: wmediumd released netlink"
+ 		       " socket, switching to perfect channel medium\n");
+ 		wmediumd_portid = 0;
+diff --git a/net/ieee802154/nl-mac.c b/net/ieee802154/nl-mac.c
+index 3503c38..b980a91 100644
+--- a/net/ieee802154/nl-mac.c
++++ b/net/ieee802154/nl-mac.c
+@@ -426,7 +426,8 @@ int ieee802154_list_iface(struct sk_buff *skb, struct genl_info *info)
+ 	if (!msg)
+ 		goto out_dev;
+ 
+-	rc = ieee802154_nl_fill_iface(msg, info->snd_portid, info->snd_seq,
++	rc = ieee802154_nl_fill_iface(msg, genl_info_snd_portid(info),
++				      info->snd_seq,
+ 				      0, dev);
+ 	if (rc < 0)
+ 		goto out_free;
+@@ -455,7 +456,7 @@ int ieee802154_dump_iface(struct sk_buff *skb, struct netlink_callback *cb)
+ 		if (idx < s_idx || dev->type != ARPHRD_IEEE802154)
+ 			goto cont;
+ 
+-		if (ieee802154_nl_fill_iface(skb, NETLINK_CB(cb->skb).portid,
++		if (ieee802154_nl_fill_iface(skb, NETLINK_CB_PORTID(cb->skb),
+ 					     cb->nlh->nlmsg_seq,
+ 					     NLM_F_MULTI, dev) < 0)
+ 			break;
+@@ -793,7 +794,7 @@ ieee802154_llsec_dump_table(struct sk_buff *skb, struct netlink_callback *cb,
+ 		data.s_idx = cb->args[1];
+ 		data.s_idx2 = cb->args[2];
+ 		data.dev = dev;
+-		data.portid = NETLINK_CB(cb->skb).portid;
++		data.portid = NETLINK_CB_PORTID(cb->skb);
+ 		data.nlmsg_seq = cb->nlh->nlmsg_seq;
+ 
+ 		data.ops->llsec->lock_table(dev);
+diff --git a/net/ieee802154/nl-phy.c b/net/ieee802154/nl-phy.c
+index 77d7301..30f80ad 100644
+--- a/net/ieee802154/nl-phy.c
++++ b/net/ieee802154/nl-phy.c
+@@ -103,7 +103,8 @@ int ieee802154_list_phy(struct sk_buff *skb, struct genl_info *info)
+ 	if (!msg)
+ 		goto out_dev;
+ 
+-	rc = ieee802154_nl_fill_phy(msg, info->snd_portid, info->snd_seq,
++	rc = ieee802154_nl_fill_phy(msg, genl_info_snd_portid(info),
++				    info->snd_seq,
+ 				    0, phy);
+ 	if (rc < 0)
+ 		goto out_free;
+@@ -135,7 +136,7 @@ static int ieee802154_dump_phy_iter(struct wpan_phy *phy, void *_data)
+ 		return 0;
+ 
+ 	rc = ieee802154_nl_fill_phy(data->skb,
+-				    NETLINK_CB(data->cb->skb).portid,
++				    NETLINK_CB_PORTID(data->cb->skb),
+ 				    data->cb->nlh->nlmsg_seq,
+ 				    NLM_F_MULTI,
+ 				    phy);
+diff --git a/net/ieee802154/nl802154.c b/net/ieee802154/nl802154.c
+index 16ef0d9..4cad924 100644
+--- a/net/ieee802154/nl802154.c
++++ b/net/ieee802154/nl802154.c
+@@ -639,7 +639,7 @@ nl802154_dump_wpan_phy(struct sk_buff *skb, struct netlink_callback *cb)
+ 		ret = nl802154_send_wpan_phy(rdev,
+ 					     NL802154_CMD_NEW_WPAN_PHY,
+ 					     skb,
+-					     NETLINK_CB(cb->skb).portid,
++					     NETLINK_CB_PORTID(cb->skb),
+ 					     cb->nlh->nlmsg_seq, NLM_F_MULTI);
+ 		if (ret < 0) {
+ 			if ((ret == -ENOBUFS || ret == -EMSGSIZE) &&
+@@ -676,7 +676,7 @@ static int nl802154_get_wpan_phy(struct sk_buff *skb, struct genl_info *info)
+ 		return -ENOMEM;
+ 
+ 	if (nl802154_send_wpan_phy(rdev, NL802154_CMD_NEW_WPAN_PHY, msg,
+-				   info->snd_portid, info->snd_seq, 0) < 0) {
++				   genl_info_snd_portid(info), info->snd_seq, 0) < 0) {
+ 		nlmsg_free(msg);
+ 		return -ENOBUFS;
+ 	}
+@@ -879,7 +879,7 @@ nl802154_dump_interface(struct sk_buff *skb, struct netlink_callback *cb)
+ 				if_idx++;
+ 				continue;
+ 			}
+-			if (nl802154_send_iface(skb, NETLINK_CB(cb->skb).portid,
++			if (nl802154_send_iface(skb, NETLINK_CB_PORTID(cb->skb),
+ 						cb->nlh->nlmsg_seq, NLM_F_MULTI,
+ 						rdev, wpan_dev) < 0) {
+ 				goto out;
+@@ -908,7 +908,7 @@ static int nl802154_get_interface(struct sk_buff *skb, struct genl_info *info)
+ 	if (!msg)
+ 		return -ENOMEM;
+ 
+-	if (nl802154_send_iface(msg, info->snd_portid, info->snd_seq, 0,
++	if (nl802154_send_iface(msg, genl_info_snd_portid(info), info->snd_seq, 0,
+ 				rdev, wdev) < 0) {
+ 		nlmsg_free(msg);
+ 		return -ENOBUFS;
+@@ -1487,7 +1487,7 @@ nl802154_dump_llsec_key(struct sk_buff *skb, struct netlink_callback *cb)
+ 
+ 	list_for_each_entry(key, &table->keys, list) {
+ 		if (nl802154_send_key(skb, NL802154_CMD_NEW_SEC_KEY,
+-				      NETLINK_CB(cb->skb).portid,
++				      NETLINK_CB_PORTID(cb->skb),
+ 				      cb->nlh->nlmsg_seq, NLM_F_MULTI,
+ 				      rdev, wpan_dev->netdev, key) < 0) {
+ 			/* TODO */
+@@ -1657,7 +1657,7 @@ nl802154_dump_llsec_dev(struct sk_buff *skb, struct netlink_callback *cb)
+ 
+ 	list_for_each_entry(dev, &table->devices, list) {
+ 		if (nl802154_send_device(skb, NL802154_CMD_NEW_SEC_LEVEL,
+-					 NETLINK_CB(cb->skb).portid,
++					 NETLINK_CB_PORTID(cb->skb),
+ 					 cb->nlh->nlmsg_seq, NLM_F_MULTI,
+ 					 rdev, wpan_dev->netdev, dev) < 0) {
+ 			/* TODO */
+@@ -1832,7 +1832,7 @@ nl802154_dump_llsec_devkey(struct sk_buff *skb, struct netlink_callback *cb)
+ 		list_for_each_entry(kpos, &dpos->keys, list) {
+ 			if (nl802154_send_devkey(skb,
+ 						 NL802154_CMD_NEW_SEC_LEVEL,
+-						 NETLINK_CB(cb->skb).portid,
++						 NETLINK_CB_PORTID(cb->skb),
+ 						 cb->nlh->nlmsg_seq,
+ 						 NLM_F_MULTI, rdev,
+ 						 wpan_dev->netdev,
+@@ -1994,7 +1994,7 @@ nl802154_dump_llsec_seclevel(struct sk_buff *skb, struct netlink_callback *cb)
+ 
+ 	list_for_each_entry(sl, &table->security_levels, list) {
+ 		if (nl802154_send_seclevel(skb, NL802154_CMD_NEW_SEC_LEVEL,
+-					   NETLINK_CB(cb->skb).portid,
++					   NETLINK_CB_PORTID(cb->skb),
+ 					   cb->nlh->nlmsg_seq, NLM_F_MULTI,
+ 					   rdev, wpan_dev->netdev, sl) < 0) {
+ 			/* TODO */
+diff --git a/net/nfc/netlink.c b/net/nfc/netlink.c
+index f58c1fb..cea4a79 100644
+--- a/net/nfc/netlink.c
++++ b/net/nfc/netlink.c
+@@ -77,7 +77,7 @@ static int nfc_genl_send_target(struct sk_buff *msg, struct nfc_target *target,
+ {
+ 	void *hdr;
+ 
+-	hdr = genlmsg_put(msg, NETLINK_CB(cb->skb).portid, cb->nlh->nlmsg_seq,
++	hdr = genlmsg_put(msg, NETLINK_CB_PORTID(cb->skb), cb->nlh->nlmsg_seq,
+ 			  &nfc_genl_family, flags, NFC_CMD_GET_TARGET);
+ 	if (!hdr)
+ 		return -EMSGSIZE;
+@@ -609,7 +609,8 @@ static int nfc_genl_dump_devices(struct sk_buff *skb,
+ 	while (dev) {
+ 		int rc;
+ 
+-		rc = nfc_genl_send_device(skb, dev, NETLINK_CB(cb->skb).portid,
++		rc = nfc_genl_send_device(skb, dev,
++					  NETLINK_CB_PORTID(cb->skb),
+ 					  cb->nlh->nlmsg_seq, cb, NLM_F_MULTI);
+ 		if (rc < 0)
+ 			break;
+@@ -728,7 +729,8 @@ static int nfc_genl_get_device(struct sk_buff *skb, struct genl_info *info)
+ 		goto out_putdev;
+ 	}
+ 
+-	rc = nfc_genl_send_device(msg, dev, info->snd_portid, info->snd_seq,
++	rc = nfc_genl_send_device(msg, dev, genl_info_snd_portid(info),
++				  info->snd_seq,
+ 				  NULL, 0);
+ 	if (rc < 0)
+ 		goto out_free;
+@@ -819,7 +821,7 @@ static int nfc_genl_start_poll(struct sk_buff *skb, struct genl_info *info)
+ 
+ 	rc = nfc_start_poll(dev, im_protocols, tm_protocols);
+ 	if (!rc)
+-		dev->genl_data.poll_req_portid = info->snd_portid;
++		dev->genl_data.poll_req_portid = genl_info_snd_portid(info);
+ 
+ 	mutex_unlock(&dev->genl_data.genl_data_mutex);
+ 
+@@ -853,7 +855,7 @@ static int nfc_genl_stop_poll(struct sk_buff *skb, struct genl_info *info)
+ 
+ 	mutex_lock(&dev->genl_data.genl_data_mutex);
+ 
+-	if (dev->genl_data.poll_req_portid != info->snd_portid) {
++	if (dev->genl_data.poll_req_portid != genl_info_snd_portid(info)) {
+ 		rc = -EBUSY;
+ 		goto out;
+ 	}
+@@ -1005,7 +1007,8 @@ static int nfc_genl_llc_get_params(struct sk_buff *skb, struct genl_info *info)
+ 		goto exit;
+ 	}
+ 
+-	rc = nfc_genl_send_params(msg, local, info->snd_portid, info->snd_seq);
++	rc = nfc_genl_send_params(msg, local, genl_info_snd_portid(info),
++				  info->snd_seq);
+ 
+ exit:
+ 	device_unlock(&dev->dev);
+@@ -1340,7 +1343,7 @@ static int nfc_genl_dump_ses(struct sk_buff *skb,
+ 	while (dev) {
+ 		int rc;
+ 
+-		rc = nfc_genl_send_se(skb, dev, NETLINK_CB(cb->skb).portid,
++		rc = nfc_genl_send_se(skb, dev, NETLINK_CB_PORTID(cb->skb),
+ 					  cb->nlh->nlmsg_seq, cb, NLM_F_MULTI);
+ 		if (rc < 0)
+ 			break;
+@@ -1596,7 +1599,7 @@ struct sk_buff *__nfc_alloc_vendor_cmd_reply_skb(struct nfc_dev *dev,
+ 		return NULL;
+ 
+ 	return __nfc_alloc_vendor_cmd_skb(dev, approxlen,
+-					  dev->cur_cmd_info->snd_portid,
++					  genl_info_snd_portid(dev->cur_cmd_info),
+ 					  dev->cur_cmd_info->snd_seq, attr,
+ 					  oui, subcmd, GFP_KERNEL);
+ }
+@@ -1765,12 +1768,13 @@ static int nfc_genl_rcv_nl_event(struct notifier_block *this,
+ 	if (event != NETLINK_URELEASE || n->protocol != NETLINK_GENERIC)
+ 		goto out;
+ 
+-	pr_debug("NETLINK_URELEASE event from id %d\n", n->portid);
++	pr_debug("NETLINK_URELEASE event from id %d\n",
++		 netlink_notify_portid(n));
+ 
+ 	w = kmalloc(sizeof(*w), GFP_ATOMIC);
+ 	if (w) {
+ 		INIT_WORK((struct work_struct *) w, nfc_urelease_event_work);
+-		w->portid = n->portid;
++		w->portid = netlink_notify_portid(n);
+ 		schedule_work((struct work_struct *) w);
+ 	}
+ 
+diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
+index 6cae9ea..3954615 100644
+--- a/net/wireless/nl80211.c
++++ b/net/wireless/nl80211.c
+@@ -1812,7 +1812,7 @@ static int nl80211_dump_wiphy(struct sk_buff *skb, struct netlink_callback *cb)
+ 		do {
+ 			ret = nl80211_send_wiphy(rdev, NL80211_CMD_NEW_WIPHY,
+ 						 skb,
+-						 NETLINK_CB(cb->skb).portid,
++						 NETLINK_CB_PORTID(cb->skb),
+ 						 cb->nlh->nlmsg_seq,
+ 						 NLM_F_MULTI, state);
+ 			if (ret < 0) {
+@@ -1869,7 +1869,7 @@ static int nl80211_get_wiphy(struct sk_buff *skb, struct genl_info *info)
+ 		return -ENOMEM;
+ 
+ 	if (nl80211_send_wiphy(rdev, NL80211_CMD_NEW_WIPHY, msg,
+-			       info->snd_portid, info->snd_seq, 0,
++			       genl_info_snd_portid(info), info->snd_seq, 0,
+ 			       &state) < 0) {
+ 		nlmsg_free(msg);
+ 		return -ENOBUFS;
+@@ -2465,7 +2465,7 @@ static int nl80211_dump_interface(struct sk_buff *skb, struct netlink_callback *
+ 				if_idx++;
+ 				continue;
+ 			}
+-			if (nl80211_send_iface(skb, NETLINK_CB(cb->skb).portid,
++			if (nl80211_send_iface(skb, NETLINK_CB_PORTID(cb->skb),
+ 					       cb->nlh->nlmsg_seq, NLM_F_MULTI,
+ 					       rdev, wdev, false) < 0) {
+ 				goto out;
+@@ -2494,7 +2494,7 @@ static int nl80211_get_interface(struct sk_buff *skb, struct genl_info *info)
+ 	if (!msg)
+ 		return -ENOMEM;
+ 
+-	if (nl80211_send_iface(msg, info->snd_portid, info->snd_seq, 0,
++	if (nl80211_send_iface(msg, genl_info_snd_portid(info), info->snd_seq, 0,
+ 			       rdev, wdev, false) < 0) {
+ 		nlmsg_free(msg);
+ 		return -ENOBUFS;
+@@ -2705,7 +2705,7 @@ static int nl80211_new_interface(struct sk_buff *skb, struct genl_info *info)
+ 	}
+ 
+ 	if (info->attrs[NL80211_ATTR_SOCKET_OWNER])
+-		wdev->owner_nlportid = info->snd_portid;
++		wdev->owner_nlportid = genl_info_snd_portid(info);
+ 
+ 	switch (type) {
+ 	case NL80211_IFTYPE_MESH_POINT:
+@@ -2739,7 +2739,7 @@ static int nl80211_new_interface(struct sk_buff *skb, struct genl_info *info)
+ 		break;
+ 	}
+ 
+-	if (nl80211_send_iface(msg, info->snd_portid, info->snd_seq, 0,
++	if (nl80211_send_iface(msg, genl_info_snd_portid(info), info->snd_seq, 0,
+ 			       rdev, wdev, false) < 0) {
+ 		nlmsg_free(msg);
+ 		return -ENOBUFS;
+@@ -2907,7 +2907,8 @@ static int nl80211_get_key(struct sk_buff *skb, struct genl_info *info)
+ 	if (!msg)
+ 		return -ENOMEM;
+ 
+-	hdr = nl80211hdr_put(msg, info->snd_portid, info->snd_seq, 0,
++	hdr = nl80211hdr_put(msg, genl_info_snd_portid(info), info->snd_seq,
++			     0,
+ 			     NL80211_CMD_NEW_KEY);
+ 	if (!hdr)
+ 		goto nla_put_failure;
+@@ -3910,7 +3911,7 @@ static int nl80211_dump_station(struct sk_buff *skb,
+ 			goto out_err;
+ 
+ 		if (nl80211_send_station(skb, NL80211_CMD_NEW_STATION,
+-				NETLINK_CB(cb->skb).portid,
++				NETLINK_CB_PORTID(cb->skb),
+ 				cb->nlh->nlmsg_seq, NLM_F_MULTI,
+ 				rdev, wdev->netdev, mac_addr,
+ 				&sinfo) < 0)
+@@ -3957,7 +3958,7 @@ static int nl80211_get_station(struct sk_buff *skb, struct genl_info *info)
+ 		return -ENOMEM;
+ 
+ 	if (nl80211_send_station(msg, NL80211_CMD_NEW_STATION,
+-				 info->snd_portid, info->snd_seq, 0,
++				 genl_info_snd_portid(info), info->snd_seq, 0,
+ 				 rdev, dev, mac_addr, &sinfo) < 0) {
+ 		nlmsg_free(msg);
+ 		return -ENOBUFS;
+@@ -4663,7 +4664,7 @@ static int nl80211_dump_mpath(struct sk_buff *skb,
+ 		if (err)
+ 			goto out_err;
+ 
+-		if (nl80211_send_mpath(skb, NETLINK_CB(cb->skb).portid,
++		if (nl80211_send_mpath(skb, NETLINK_CB_PORTID(cb->skb),
+ 				       cb->nlh->nlmsg_seq, NLM_F_MULTI,
+ 				       wdev->netdev, dst, next_hop,
+ 				       &pinfo) < 0)
+@@ -4712,7 +4713,7 @@ static int nl80211_get_mpath(struct sk_buff *skb, struct genl_info *info)
+ 	if (!msg)
+ 		return -ENOMEM;
+ 
+-	if (nl80211_send_mpath(msg, info->snd_portid, info->snd_seq, 0,
++	if (nl80211_send_mpath(msg, genl_info_snd_portid(info), info->snd_seq, 0,
+ 				 dev, dst, next_hop, &pinfo) < 0) {
+ 		nlmsg_free(msg);
+ 		return -ENOBUFS;
+@@ -4817,7 +4818,7 @@ static int nl80211_get_mpp(struct sk_buff *skb, struct genl_info *info)
+ 	if (!msg)
+ 		return -ENOMEM;
+ 
+-	if (nl80211_send_mpath(msg, info->snd_portid, info->snd_seq, 0,
++	if (nl80211_send_mpath(msg, genl_info_snd_portid(info), info->snd_seq, 0,
+ 			       dev, dst, mpp, &pinfo) < 0) {
+ 		nlmsg_free(msg);
+ 		return -ENOBUFS;
+@@ -4859,7 +4860,7 @@ static int nl80211_dump_mpp(struct sk_buff *skb,
+ 		if (err)
+ 			goto out_err;
+ 
+-		if (nl80211_send_mpath(skb, NETLINK_CB(cb->skb).portid,
++		if (nl80211_send_mpath(skb, NETLINK_CB_PORTID(cb->skb),
+ 				       cb->nlh->nlmsg_seq, NLM_F_MULTI,
+ 				       wdev->netdev, dst, mpp,
+ 				       &pinfo) < 0)
+@@ -4988,7 +4989,7 @@ static int nl80211_req_set_reg(struct sk_buff *skb, struct genl_info *info)
+ 		return regulatory_hint_user(data, user_reg_hint_type);
+ 	case NL80211_USER_REG_HINT_INDOOR:
+ 		if (info->attrs[NL80211_ATTR_SOCKET_OWNER]) {
+-			owner_nlportid = info->snd_portid;
++			owner_nlportid = genl_info_snd_portid(info);
+ 			is_indoor = !!info->attrs[NL80211_ATTR_REG_INDOOR];
+ 		} else {
+ 			owner_nlportid = 0;
+@@ -5034,7 +5035,8 @@ static int nl80211_get_mesh_config(struct sk_buff *skb,
+ 	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
+ 	if (!msg)
+ 		return -ENOMEM;
+-	hdr = nl80211hdr_put(msg, info->snd_portid, info->snd_seq, 0,
++	hdr = nl80211hdr_put(msg, genl_info_snd_portid(info), info->snd_seq,
++			     0,
+ 			     NL80211_CMD_GET_MESH_CONFIG);
+ 	if (!hdr)
+ 		goto out;
+@@ -5451,7 +5453,8 @@ static int nl80211_get_reg_do(struct sk_buff *skb, struct genl_info *info)
+ 	if (!msg)
+ 		return -ENOBUFS;
+ 
+-	hdr = nl80211hdr_put(msg, info->snd_portid, info->snd_seq, 0,
++	hdr = nl80211hdr_put(msg, genl_info_snd_portid(info), info->snd_seq,
++			     0,
+ 			     NL80211_CMD_GET_REG);
+ 	if (!hdr)
+ 		goto put_failure;
+@@ -5512,7 +5515,8 @@ static int nl80211_send_regdom(struct sk_buff *msg, struct netlink_callback *cb,
+ 			       u32 seq, int flags, struct wiphy *wiphy,
+ 			       const struct ieee80211_regdomain *regdom)
+ {
+-	void *hdr = nl80211hdr_put(msg, NETLINK_CB(cb->skb).portid, seq, flags,
++	void *hdr = nl80211hdr_put(msg, NETLINK_CB_PORTID(cb->skb), seq,
++				   flags,
+ 				   NL80211_CMD_GET_REG);
+ 
+ 	if (!hdr)
+@@ -6440,7 +6444,7 @@ static int nl80211_start_sched_scan(struct sk_buff *skb,
+ 	sched_scan_req->wiphy = &rdev->wiphy;
+ 
+ 	if (info->attrs[NL80211_ATTR_SOCKET_OWNER])
+-		sched_scan_req->owner_nlportid = info->snd_portid;
++		sched_scan_req->owner_nlportid = genl_info_snd_portid(info);
+ 
+ 	rcu_assign_pointer(rdev->sched_scan_req, sched_scan_req);
+ 
+@@ -6691,7 +6695,7 @@ static int nl80211_send_bss(struct sk_buff *msg, struct netlink_callback *cb,
+ 
+ 	ASSERT_WDEV_LOCK(wdev);
+ 
+-	hdr = nl80211hdr_put(msg, NETLINK_CB(cb->skb).portid, seq, flags,
++	hdr = nl80211hdr_put(msg, NETLINK_CB_PORTID(cb->skb), seq, flags,
+ 			     NL80211_CMD_NEW_SCAN_RESULTS);
+ 	if (!hdr)
+ 		return -1;
+@@ -6951,7 +6955,7 @@ static int nl80211_dump_survey(struct sk_buff *skb, struct netlink_callback *cb)
+ 		}
+ 
+ 		if (nl80211_send_survey(skb,
+-				NETLINK_CB(cb->skb).portid,
++				NETLINK_CB_PORTID(cb->skb),
+ 				cb->nlh->nlmsg_seq, NLM_F_MULTI,
+ 				wdev->netdev, radio_stats, &survey) < 0)
+ 			goto out;
+@@ -7777,7 +7781,7 @@ static int nl80211_testmode_dump(struct sk_buff *skb,
+ 	}
+ 
+ 	while (1) {
+-		void *hdr = nl80211hdr_put(skb, NETLINK_CB(cb->skb).portid,
++		void *hdr = nl80211hdr_put(skb, NETLINK_CB_PORTID(cb->skb),
+ 					   cb->nlh->nlmsg_seq, NLM_F_MULTI,
+ 					   NL80211_CMD_TESTMODE);
+ 		struct nlattr *tmdata;
+@@ -8166,7 +8170,8 @@ static int nl80211_remain_on_channel(struct sk_buff *skb,
+ 	if (!msg)
+ 		return -ENOMEM;
+ 
+-	hdr = nl80211hdr_put(msg, info->snd_portid, info->snd_seq, 0,
++	hdr = nl80211hdr_put(msg, genl_info_snd_portid(info), info->snd_seq,
++			     0,
+ 			     NL80211_CMD_REMAIN_ON_CHANNEL);
+ 	if (!hdr) {
+ 		err = -ENOBUFS;
+@@ -8475,9 +8480,10 @@ static int nl80211_register_mgmt(struct sk_buff *skb, struct genl_info *info)
+ 	if (!rdev->ops->mgmt_tx)
+ 		return -EOPNOTSUPP;
+ 
+-	return cfg80211_mlme_register_mgmt(wdev, info->snd_portid, frame_type,
+-			nla_data(info->attrs[NL80211_ATTR_FRAME_MATCH]),
+-			nla_len(info->attrs[NL80211_ATTR_FRAME_MATCH]));
++	return cfg80211_mlme_register_mgmt(wdev, genl_info_snd_portid(info),
++					   frame_type,
++					   nla_data(info->attrs[NL80211_ATTR_FRAME_MATCH]),
++					   nla_len(info->attrs[NL80211_ATTR_FRAME_MATCH]));
+ }
+ 
+ static int nl80211_tx_mgmt(struct sk_buff *skb, struct genl_info *info)
+@@ -8577,7 +8583,8 @@ static int nl80211_tx_mgmt(struct sk_buff *skb, struct genl_info *info)
+ 		if (!msg)
+ 			return -ENOMEM;
+ 
+-		hdr = nl80211hdr_put(msg, info->snd_portid, info->snd_seq, 0,
++		hdr = nl80211hdr_put(msg, genl_info_snd_portid(info),
++				     info->snd_seq, 0,
+ 				     NL80211_CMD_FRAME);
+ 		if (!hdr) {
+ 			err = -ENOBUFS;
+@@ -8689,7 +8696,8 @@ static int nl80211_get_power_save(struct sk_buff *skb, struct genl_info *info)
+ 	if (!msg)
+ 		return -ENOMEM;
+ 
+-	hdr = nl80211hdr_put(msg, info->snd_portid, info->snd_seq, 0,
++	hdr = nl80211hdr_put(msg, genl_info_snd_portid(info), info->snd_seq,
++			     0,
+ 			     NL80211_CMD_GET_POWER_SAVE);
+ 	if (!hdr) {
+ 		err = -ENOBUFS;
+@@ -9082,7 +9090,8 @@ static int nl80211_get_wowlan(struct sk_buff *skb, struct genl_info *info)
+ 	if (!msg)
+ 		return -ENOMEM;
+ 
+-	hdr = nl80211hdr_put(msg, info->snd_portid, info->snd_seq, 0,
++	hdr = nl80211hdr_put(msg, genl_info_snd_portid(info), info->snd_seq,
++			     0,
+ 			     NL80211_CMD_GET_WOWLAN);
+ 	if (!hdr)
+ 		goto nla_put_failure;
+@@ -9580,7 +9589,8 @@ static int nl80211_get_coalesce(struct sk_buff *skb, struct genl_info *info)
+ 	if (!msg)
+ 		return -ENOMEM;
+ 
+-	hdr = nl80211hdr_put(msg, info->snd_portid, info->snd_seq, 0,
++	hdr = nl80211hdr_put(msg, genl_info_snd_portid(info), info->snd_seq,
++			     0,
+ 			     NL80211_CMD_GET_COALESCE);
+ 	if (!hdr)
+ 		goto nla_put_failure;
+@@ -9833,7 +9843,7 @@ static int nl80211_register_unexpected_frame(struct sk_buff *skb,
+ 	if (wdev->ap_unexpected_nlportid)
+ 		return -EBUSY;
+ 
+-	wdev->ap_unexpected_nlportid = info->snd_portid;
++	wdev->ap_unexpected_nlportid = genl_info_snd_portid(info);
+ 	return 0;
+ }
+ 
+@@ -9863,7 +9873,8 @@ static int nl80211_probe_client(struct sk_buff *skb,
+ 	if (!msg)
+ 		return -ENOMEM;
+ 
+-	hdr = nl80211hdr_put(msg, info->snd_portid, info->snd_seq, 0,
++	hdr = nl80211hdr_put(msg, genl_info_snd_portid(info), info->snd_seq,
++			     0,
+ 			     NL80211_CMD_PROBE_CLIENT);
+ 	if (!hdr) {
+ 		err = -ENOBUFS;
+@@ -9906,13 +9917,13 @@ static int nl80211_register_beacons(struct sk_buff *skb, struct genl_info *info)
+ 	/* First, check if already registered. */
+ 	spin_lock_bh(&rdev->beacon_registrations_lock);
+ 	list_for_each_entry(reg, &rdev->beacon_registrations, list) {
+-		if (reg->nlportid == info->snd_portid) {
++		if (reg->nlportid == genl_info_snd_portid(info)) {
+ 			rv = -EALREADY;
+ 			goto out_err;
+ 		}
+ 	}
+ 	/* Add it to the list */
+-	nreg->nlportid = info->snd_portid;
++	nreg->nlportid = genl_info_snd_portid(info);
+ 	list_add(&nreg->list, &rdev->beacon_registrations);
+ 
+ 	spin_unlock_bh(&rdev->beacon_registrations_lock);
+@@ -9978,7 +9989,8 @@ static int nl80211_get_protocol_features(struct sk_buff *skb,
+ 	if (!msg)
+ 		return -ENOMEM;
+ 
+-	hdr = nl80211hdr_put(msg, info->snd_portid, info->snd_seq, 0,
++	hdr = nl80211hdr_put(msg, genl_info_snd_portid(info), info->snd_seq,
++			     0,
+ 			     NL80211_CMD_GET_PROTOCOL_FEATURES);
+ 	if (!hdr)
+ 		goto nla_put_failure;
+@@ -10053,7 +10065,7 @@ static int nl80211_crit_protocol_start(struct sk_buff *skb,
+ 
+ 	ret = rdev_crit_proto_start(rdev, wdev, proto, duration);
+ 	if (!ret)
+-		rdev->crit_proto_nlportid = info->snd_portid;
++		rdev->crit_proto_nlportid = genl_info_snd_portid(info);
+ 
+ 	return ret;
+ }
+@@ -10294,7 +10306,7 @@ static int nl80211_vendor_cmd_dump(struct sk_buff *skb,
+ 	}
+ 
+ 	while (1) {
+-		void *hdr = nl80211hdr_put(skb, NETLINK_CB(cb->skb).portid,
++		void *hdr = nl80211hdr_put(skb, NETLINK_CB_PORTID(cb->skb),
+ 					   cb->nlh->nlmsg_seq, NLM_F_MULTI,
+ 					   NL80211_CMD_VENDOR);
+ 		if (!hdr)
+@@ -10345,7 +10357,7 @@ struct sk_buff *__cfg80211_alloc_reply_skb(struct wiphy *wiphy,
+ 		return NULL;
+ 
+ 	return __cfg80211_alloc_vendor_skb(rdev, NULL, approxlen,
+-					   rdev->cur_cmd_info->snd_portid,
++					   genl_info_snd_portid(rdev->cur_cmd_info),
+ 					   rdev->cur_cmd_info->snd_seq,
+ 					   cmd, attr, NULL, GFP_KERNEL);
+ }
+@@ -13173,21 +13185,22 @@ static int nl80211_netlink_notify(struct notifier_block * nb,
+ 		struct cfg80211_sched_scan_request *sched_scan_req =
+ 			rcu_dereference(rdev->sched_scan_req);
+ 
+-		if (sched_scan_req && notify->portid &&
+-		    sched_scan_req->owner_nlportid == notify->portid)
++		if (sched_scan_req && netlink_notify_portid(notify) &&
++		    sched_scan_req->owner_nlportid == netlink_notify_portid(notify))
+ 			schedule_scan_stop = true;
+ 
+ 		list_for_each_entry_rcu(wdev, &rdev->wdev_list, list) {
+-			cfg80211_mlme_unregister_socket(wdev, notify->portid);
++			cfg80211_mlme_unregister_socket(wdev,
++							netlink_notify_portid(notify));
+ 
+-			if (wdev->owner_nlportid == notify->portid)
++			if (wdev->owner_nlportid == netlink_notify_portid(notify))
+ 				schedule_destroy_work = true;
+ 		}
+ 
+ 		spin_lock_bh(&rdev->beacon_registrations_lock);
+ 		list_for_each_entry_safe(reg, tmp, &rdev->beacon_registrations,
+ 					 list) {
+-			if (reg->nlportid == notify->portid) {
++			if (reg->nlportid == netlink_notify_portid(notify)) {
+ 				list_del(&reg->list);
+ 				kfree(reg);
+ 				break;
+@@ -13200,7 +13213,7 @@ static int nl80211_netlink_notify(struct notifier_block * nb,
+ 
+ 			destroy = kzalloc(sizeof(*destroy), GFP_ATOMIC);
+ 			if (destroy) {
+-				destroy->nlportid = notify->portid;
++				destroy->nlportid = netlink_notify_portid(notify);
+ 				spin_lock(&rdev->destroy_list_lock);
+ 				list_add(&destroy->list, &rdev->destroy_list);
+ 				spin_unlock(&rdev->destroy_list_lock);
+@@ -13221,7 +13234,7 @@ static int nl80211_netlink_notify(struct notifier_block * nb,
+ 	 * It is possible that the user space process that is controlling the
+ 	 * indoor setting disappeared, so notify the regulatory core.
+ 	 */
+-	regulatory_netlink_notify(notify->portid);
++	regulatory_netlink_notify(netlink_notify_portid(notify));
+ 	return NOTIFY_OK;
+ }
+ 
+-- 
+2.6.3
+

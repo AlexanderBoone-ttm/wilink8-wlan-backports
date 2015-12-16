@@ -1,0 +1,33 @@
+From e11e1582409293504681b1aed0315ef507b87739 Mon Sep 17 00:00:00 2001
+Date: Wed, 16 Dec 2015 17:31:09 +0200
+Subject: [PATCH 14/25] apply backport SmPL patch
+ collateral-evolutions/network/0039-ethtool_rxnfc/rxnfc.cocci
+
+---
+ drivers/net/ethernet/intel/igb/igb_ethtool.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/ethernet/intel/igb/igb_ethtool.c b/drivers/net/ethernet/intel/igb/igb_ethtool.c
+index eaf6e3d..1f0bcea 100644
+--- a/drivers/net/ethernet/intel/igb/igb_ethtool.c
++++ b/drivers/net/ethernet/intel/igb/igb_ethtool.c
+@@ -2465,8 +2465,14 @@ static int igb_get_rss_hash_opts(struct igb_adapter *adapter,
+ 	return 0;
+ }
+ 
+-static int igb_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd,
+-			 u32 *rule_locs)
++static int igb_get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)
++			 ,
++			 u32 *rule_locs
++#else
++			 , void *rule_locs
++#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0) */
++)
+ {
+ 	struct igb_adapter *adapter = netdev_priv(dev);
+ 	int ret = -EOPNOTSUPP;
+-- 
+2.6.3
+

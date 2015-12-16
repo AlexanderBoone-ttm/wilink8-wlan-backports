@@ -1,0 +1,29 @@
+From d7f1e2df5ac6502a70eea346e2186105c5166936 Mon Sep 17 00:00:00 2001
+Date: Wed, 16 Dec 2015 17:31:56 +0200
+Subject: [PATCH 23/25] apply backport SmPL patch
+ collateral-evolutions/network/0059-skb_xmit_more/skb_no_xmit_more.cocci
+
+---
+ drivers/net/ethernet/intel/igb/igb_main.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/intel/igb/igb_main.c b/drivers/net/ethernet/intel/igb/igb_main.c
+index 45c462e..0473779 100644
+--- a/drivers/net/ethernet/intel/igb/igb_main.c
++++ b/drivers/net/ethernet/intel/igb/igb_main.c
+@@ -4999,7 +4999,11 @@ static void igb_tx_map(struct igb_ring *tx_ring,
+ 	/* Make sure there is space in the ring for the next send. */
+ 	igb_maybe_stop_tx(tx_ring, DESC_NEEDED);
+ 
+-	if (netif_xmit_stopped(txring_txq(tx_ring)) || !skb->xmit_more) {
++	if (netif_xmit_stopped(txring_txq(tx_ring))
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,18,0)
++ || !skb->xmit_more
++#endif /* if LINUX_VERSION_CODE >= KERNEL_VERSION(3,18,0) */
++) {
+ 		writel(i, tx_ring->tail);
+ 
+ 		/* we need this if more than one processor can write to our tail
+-- 
+2.6.3
+

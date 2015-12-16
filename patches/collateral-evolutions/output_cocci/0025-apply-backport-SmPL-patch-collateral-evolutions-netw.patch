@@ -1,0 +1,33 @@
+From 845ee2ee09ee3347ff97dea4cf08282d801dfffb Mon Sep 17 00:00:00 2001
+Date: Wed, 16 Dec 2015 17:32:01 +0200
+Subject: [PATCH 25/25] apply backport SmPL patch
+ collateral-evolutions/network/0065-ndisc_send_na-argument.cocci
+
+---
+ drivers/net/usb/cdc_mbim.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/drivers/net/usb/cdc_mbim.c b/drivers/net/usb/cdc_mbim.c
+index e39904f..ef107de 100644
+--- a/drivers/net/usb/cdc_mbim.c
++++ b/drivers/net/usb/cdc_mbim.c
+@@ -359,11 +359,16 @@ static void do_neigh_solicit(struct usbnet *dev, u8 *buf, u16 tci)
+ 	in6_dev_put(in6_dev);
+ 
+ 	/* ipv6_stub != NULL if in6_dev_get returned an inet6_dev */
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,4,0)
+ 	ipv6_stub->ndisc_send_na(netdev, &iph->saddr, &msg->target,
+ 				 is_router /* router */,
+ 				 true /* solicited */,
+ 				 false /* override */,
+ 				 true /* inc_opt */);
++#else
++	ipv6_stub->ndisc_send_na(netdev, NULL, &iph->saddr, &msg->target,
++				 is_router, true, false, true);
++#endif
+ out:
+ 	dev_put(netdev);
+ }
+-- 
+2.6.3
+

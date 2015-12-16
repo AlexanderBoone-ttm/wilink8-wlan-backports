@@ -1,0 +1,63 @@
+From d5277a925706b6930d1aa3ec8c097d8c55698e22 Mon Sep 17 00:00:00 2001
+Date: Wed, 16 Dec 2015 17:30:54 +0200
+Subject: [PATCH 10/25] apply backport SmPL patch
+ collateral-evolutions/network/0034-ndo_set_vf_spoofchk/set_vf_spoofchk.cocci
+
+---
+ drivers/net/ethernet/intel/igb/igb_main.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/drivers/net/ethernet/intel/igb/igb_main.c b/drivers/net/ethernet/intel/igb/igb_main.c
+index f0b47de..ae5e871 100644
+--- a/drivers/net/ethernet/intel/igb/igb_main.c
++++ b/drivers/net/ethernet/intel/igb/igb_main.c
+@@ -178,8 +178,10 @@ static int igb_ndo_set_vf_mac(struct net_device *netdev, int vf, u8 *mac);
+ static int igb_ndo_set_vf_vlan(struct net_device *netdev,
+ 			       int vf, u16 vlan, u8 qos);
+ static int igb_ndo_set_vf_bw(struct net_device *, int, int, int);
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)
+ static int igb_ndo_set_vf_spoofchk(struct net_device *netdev, int vf,
+ 				   bool setting);
++#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0) */
+ static int igb_ndo_get_vf_config(struct net_device *netdev, int vf,
+ 				 struct ifla_vf_info *ivi);
+ static void igb_check_vf_rate_limit(struct igb_adapter *);
+@@ -2093,7 +2095,9 @@ static const struct net_device_ops igb_netdev_ops = {
+ 	.ndo_set_vf_mac		= igb_ndo_set_vf_mac,
+ 	.ndo_set_vf_vlan	= igb_ndo_set_vf_vlan,
+ 	.ndo_set_vf_rate	= igb_ndo_set_vf_bw,
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)
+ 	.ndo_set_vf_spoofchk	= igb_ndo_set_vf_spoofchk,
++#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0) */
+ 	.ndo_get_vf_config	= igb_ndo_get_vf_config,
+ #ifdef CONFIG_NET_POLL_CONTROLLER
+ 	.ndo_poll_controller	= igb_netpoll,
+@@ -7897,6 +7901,7 @@ static int igb_ndo_set_vf_bw(struct net_device *netdev, int vf,
+ 	return 0;
+ }
+ 
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)
+ static int igb_ndo_set_vf_spoofchk(struct net_device *netdev, int vf,
+ 				   bool setting)
+ {
+@@ -7923,6 +7928,7 @@ static int igb_ndo_set_vf_spoofchk(struct net_device *netdev, int vf,
+ 	adapter->vf_data[vf].spoofchk_enabled = setting;
+ 	return 0;
+ }
++#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0) */
+ 
+ static int igb_ndo_get_vf_config(struct net_device *netdev,
+ 				 int vf, struct ifla_vf_info *ivi)
+@@ -7936,7 +7942,9 @@ static int igb_ndo_get_vf_config(struct net_device *netdev,
+ 	ivi->min_tx_rate = 0;
+ 	ivi->vlan = adapter->vf_data[vf].pf_vlan;
+ 	ivi->qos = adapter->vf_data[vf].pf_qos;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)
+ 	ivi->spoofchk = adapter->vf_data[vf].spoofchk_enabled;
++#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0) */
+ 	return 0;
+ }
+ 
+-- 
+2.6.3
+

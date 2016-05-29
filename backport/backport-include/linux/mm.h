@@ -100,7 +100,11 @@ static inline unsigned long *frame_vector_pfns(struct frame_vector *vec)
 #define page_is_pfmemalloc LINUX_BACKPORT(page_is_pfmemalloc)
 static inline bool page_is_pfmemalloc(struct page *page)
 {
-	return page->pfmemalloc;
+	/*
+	 * Page index cannot be this large so this must be
+	 * a pfmemalloc page.
+	 */
+	return page->index == -1UL;
 }
 #endif /* < 4.2 */
 
